@@ -103,6 +103,27 @@ inline sum2_t abs2( sum2_t a )
 /*
  * Utility function to perform a parallel sum reduction of an array of integers
  */
+// int parallel_sum( int value, int x, volatile local int *array )
+// {
+//     array[x] = value;
+//     barrier( CLK_LOCAL_MEM_FENCE );
+
+//     int dim = get_local_size( 0 );
+
+//     while( dim > 1 )
+//     {
+//         dim >>= 1;
+
+//         if( x < dim )
+//             array[x] += array[x + dim];
+
+//         if( dim > 32 )
+//             barrier( CLK_LOCAL_MEM_FENCE );
+//     }
+
+//     return array[0];
+// }
+
 int parallel_sum( int value, int x, volatile local int *array )
 {
     array[x] = value;
@@ -110,15 +131,23 @@ int parallel_sum( int value, int x, volatile local int *array )
 
     int dim = get_local_size( 0 );
 
-    while( dim > 1 )
+    while( dim > 64 )
     {
         dim >>= 1;
 
         if( x < dim )
             array[x] += array[x + dim];
 
-        if( dim > 32 )
-            barrier( CLK_LOCAL_MEM_FENCE );
+        barrier( CLK_LOCAL_MEM_FENCE );
+    }
+
+    if (x < 32) {
+        array[x] += array[x + 32];
+        array[x] += array[x + 16];
+        array[x] += array[x + 8];
+        array[x] += array[x + 4];
+        array[x] += array[x + 2];
+        array[x] += array[x + 1];
     }
 
     return array[0];

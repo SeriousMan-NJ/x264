@@ -168,6 +168,7 @@ int x264_opencl_lowres_init( x264_t *h, x264_frame_t *fenc, int lambda )
     OCLCHECK( clEnqueueWriteBuffer, h->opencl.queue,  h->opencl.luma_16x16_image[h->opencl.last_buf], CL_FALSE, 0, luma_length, locked, 0, NULL, NULL );
 
     size_t gdim[2];
+    size_t ldim[2];
     if( h->param.rc.i_aq_mode && fenc->i_inv_qscale_factor )
     {
         int size = h->mb.i_mb_count * sizeof(int16_t);
@@ -194,7 +195,23 @@ int x264_opencl_lowres_init( x264_t *h, x264_frame_t *fenc, int lambda )
     OCLCHECK( clSetKernelArg, h->opencl.downscale_hpel_kernel, arg++, sizeof(int), &stride );
     gdim[0] = 8 * h->mb.i_mb_width;
     gdim[1] = 8 * h->mb.i_mb_height;
-    OCLCHECK( clEnqueueNDRangeKernel, h->opencl.queue, h->opencl.downscale_hpel_kernel, 2, NULL, gdim, NULL, 0, NULL, NULL );
+    ldim[0] = 32;
+    ldim[1] = 1;
+    cl_event event;
+    OCLCHECK( clEnqueueNDRangeKernel, h->opencl.queue, h->opencl.downscale_hpel_kernel, 2, NULL, gdim, ldim, 0, NULL, &event );
+    OCLCHECK( clWaitForEvents, 1, &event);
+
+    cl_ulong time_start;
+    cl_ulong time_end;
+
+    OCLCHECK( clGetEventProfilingInfo, event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL );
+    OCLCHECK( clGetEventProfilingInfo, event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL );
+
+    double nanoSeconds = time_end-time_start;
+    FILE *f = fopen("kernel.csv", "a");
+    fprintf(f, "%0.3f,", nanoSeconds / 1000.0);
+    fclose(f);
+    // printf("OpenCl Execution time is: %0.3f microseconds \n",nanoSeconds / 1000.0);
 
     for( int i = 0; i < NUM_IMAGE_SCALES - 1; i++ )
     {
@@ -216,7 +233,6 @@ int x264_opencl_lowres_init( x264_t *h, x264_frame_t *fenc, int lambda )
         OCLCHECK( clEnqueueNDRangeKernel, h->opencl.queue, kern, 2, NULL, gdim, NULL, 0, NULL, NULL );
     }
 
-    size_t ldim[2];
     gdim[0] = ((h->mb.i_mb_width + 31)>>5)<<5;
     gdim[1] = 8*h->mb.i_mb_height;
     ldim[0] = 32;

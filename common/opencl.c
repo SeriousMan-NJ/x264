@@ -91,6 +91,8 @@ x264_opencl_function_t *x264_opencl_load_library( void )
     LOAD_OCL_FUNC( clReleaseMemObject, 0 );
     LOAD_OCL_FUNC( clReleaseProgram, 0 );
     LOAD_OCL_FUNC( clSetKernelArg, 0 );
+    LOAD_OCL_FUNC( clWaitForEvents, 0 );
+    LOAD_OCL_FUNC( clGetEventProfilingInfo, 0 );
     return ocl;
 #undef fail
 fail2:
@@ -522,7 +524,7 @@ int x264_opencl_lookahead_init( x264_t *h )
                 continue;
             }
 
-            h->opencl.queue = ocl->clCreateCommandQueue( context, h->opencl.device, 0, &status );
+            h->opencl.queue = ocl->clCreateCommandQueue( context, h->opencl.device, CL_QUEUE_PROFILING_ENABLE, &status );
             if( status != CL_SUCCESS || !h->opencl.queue )
                 continue;
 

@@ -37,42 +37,133 @@ kernel void downscale_hpel( const global pixel *fenc,
     int2 pos = (int2)(x, y);
     pixel right, left;
 
-    right = rhadd( fenc[x*2], src1[x*2] );
-    left  = rhadd( fenc[x*2+1], src1[x*2+1] );
+    int lx = get_local_id(0);
+
+    __local pixel fenc_l[134];
+    __local pixel src1_l[134];
+    __local pixel src2_l[134];
+
+    fenc_l[lx*2] = fenc[x*2];
+    fenc_l[lx*2+1] = fenc[x*2+1];
+    src1_l[lx*2] = src1[x*2];
+    src1_l[lx*2+1] = src1[x*2+1];
+    src2_l[lx*2] = src2[x*2];
+    src2_l[lx*2+1] = src2[x*2+1];
+
+    if (0 <= lx && lx <= 5) {
+        fenc_l[128+lx] = fenc[x*2+128+lx];
+    }
+    if (6 <= lx && lx <= 11) {
+        src1_l[122+lx] = src1[x*2+122+lx];
+    }
+    if (12 <= lx && lx <= 17) {
+        src2_l[116+lx] = src2[x*2+116+lx];
+    }
+
+    barrier( CLK_LOCAL_MEM_FENCE );
+
+    right = rhadd( fenc_l[lx*2], src1_l[lx*2] );
+    left  = rhadd( fenc_l[lx*2+1], src1_l[lx*2+1] );
     values.s0 = rhadd( right, left );           // F
 
-    right = rhadd( fenc[2*x+1], src1[2*x+1] );
-    left  = rhadd( fenc[2*x+2], src1[2*x+2] );
+    right = rhadd( fenc_l[2*lx+1], src1_l[2*lx+1] );
+    left  = rhadd( fenc_l[2*lx+2], src1_l[2*lx+2] );
     values.s1 = rhadd( right, left );           // H
 
-    right = rhadd( src1[2*x], src2[2*x] );
-    left  = rhadd( src1[2*x+1], src2[2*x+1] );
+    right = rhadd( src1_l[2*lx], src2_l[2*lx] );
+    left  = rhadd( src1_l[2*lx+1], src2_l[2*lx+1] );
     values.s2 = rhadd( right, left );           // V
 
-    right = rhadd( src1[2*x+1], src2[2*x+1] );
-    left  = rhadd( src1[2*x+2], src2[2*x+2] );
+    right = rhadd( src1_l[2*lx+1], src2_l[2*lx+1] );
+    left  = rhadd( src1_l[2*lx+2], src2_l[2*lx+2] );
     values.s3 = rhadd( right, left );           // C
 
     uint4 val = (uint4) ((values.s3 & 0xff) << 24) | ((values.s2 & 0xff) << 16) | ((values.s1 & 0xff) << 8) | (values.s0 & 0xff);
     write_imageui( hpel_planes, pos, val );
 
-    x = select( x, x+1, x+1 < get_global_size( 0 ) );
-    right = rhadd( fenc[x*2], src1[x*2] );
-    left  = rhadd( fenc[x*2+1], src1[x*2+1] );
-    values.s1 = rhadd( right, left );
+    if (get_group_id(0) < get_num_groups(0) - 1 || lx < 63) {
+        right = rhadd( fenc_l[lx*2+2], src1_l[lx*2+2] );
+        left  = rhadd( fenc_l[lx*2+3], src1_l[lx*2+3] );
+        values.s1 = rhadd( right, left );
 
-    x = select( x, x+1, x+1 < get_global_size( 0 ) );
-    right = rhadd( fenc[x*2], src1[x*2] );
-    left  = rhadd( fenc[x*2+1], src1[x*2+1] );
-    values.s2 = rhadd( right, left );
+        right = rhadd( fenc_l[lx*2+4], src1_l[lx*2+4] );
+        left  = rhadd( fenc_l[lx*2+5], src1_l[lx*2+5] );
+        values.s2 = rhadd( right, left );
 
-    x = select( x, x+1, x+1 < get_global_size( 0 ) );
-    right = rhadd( fenc[x*2], src1[x*2] );
-    left  = rhadd( fenc[x*2+1], src1[x*2+1] );
-    values.s3 = rhadd( right, left );
+        right = rhadd( fenc_l[lx*2+6], src1_l[lx*2+6] );
+        left  = rhadd( fenc_l[lx*2+7], src1_l[lx*2+7] );
+        values.s3 = rhadd( right, left );
+    } else {
+        x = select( x, x+1, x+1 < get_global_size( 0 ) );
+        right = rhadd( fenc[x*2], src1[x*2] );
+        left  = rhadd( fenc[x*2+1], src1[x*2+1] );
+        values.s1 = rhadd( right, left );
+
+        x = select( x, x+1, x+1 < get_global_size( 0 ) );
+        right = rhadd( fenc[x*2], src1[x*2] );
+        left  = rhadd( fenc[x*2+1], src1[x*2+1] );
+        values.s2 = rhadd( right, left );
+
+        x = select( x, x+1, x+1 < get_global_size( 0 ) );
+        right = rhadd( fenc[x*2], src1[x*2] );
+        left  = rhadd( fenc[x*2+1], src1[x*2+1] );
+        values.s3 = rhadd( right, left );
+    }
 
     write_imageui( fenc_img, pos, values );
 }
+
+// kernel void downscale_hpel( const global pixel *fenc,
+//                             write_only image2d_t fenc_img,
+//                             write_only image2d_t hpel_planes,
+//                             int stride )
+// {
+//     int x = get_global_id( 0 );
+//     int y = get_global_id( 1 );
+//     uint4 values;
+
+//     fenc += y * stride * 2;
+//     const global pixel *src1 = fenc + stride;
+//     const global pixel *src2 = (y == get_global_size( 1 )-1) ? src1 : src1 + stride;
+//     int2 pos = (int2)(x, y);
+//     pixel right, left;
+
+//     right = rhadd( fenc[x*2], src1[x*2] );
+//     left  = rhadd( fenc[x*2+1], src1[x*2+1] );
+//     values.s0 = rhadd( right, left );           // F
+
+//     right = rhadd( fenc[2*x+1], src1[2*x+1] );
+//     left  = rhadd( fenc[2*x+2], src1[2*x+2] );
+//     values.s1 = rhadd( right, left );           // H
+
+//     right = rhadd( src1[2*x], src2[2*x] );
+//     left  = rhadd( src1[2*x+1], src2[2*x+1] );
+//     values.s2 = rhadd( right, left );           // V
+
+//     right = rhadd( src1[2*x+1], src2[2*x+1] );
+//     left  = rhadd( src1[2*x+2], src2[2*x+2] );
+//     values.s3 = rhadd( right, left );           // C
+
+//     uint4 val = (uint4) ((values.s3 & 0xff) << 24) | ((values.s2 & 0xff) << 16) | ((values.s1 & 0xff) << 8) | (values.s0 & 0xff);
+//     write_imageui( hpel_planes, pos, val );
+
+//     x = select( x, x+1, x+1 < get_global_size( 0 ) );
+//     right = rhadd( fenc[x*2], src1[x*2] );
+//     left  = rhadd( fenc[x*2+1], src1[x*2+1] );
+//     values.s1 = rhadd( right, left );
+
+//     x = select( x, x+1, x+1 < get_global_size( 0 ) );
+//     right = rhadd( fenc[x*2], src1[x*2] );
+//     left  = rhadd( fenc[x*2+1], src1[x*2+1] );
+//     values.s2 = rhadd( right, left );
+
+//     x = select( x, x+1, x+1 < get_global_size( 0 ) );
+//     right = rhadd( fenc[x*2], src1[x*2] );
+//     left  = rhadd( fenc[x*2+1], src1[x*2+1] );
+//     values.s3 = rhadd( right, left );
+
+//     write_imageui( fenc_img, pos, values );
+// }
 
 /*
  * downscale lowres hierarchical motion search image, copy from one image to

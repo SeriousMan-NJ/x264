@@ -706,6 +706,8 @@ typedef struct
     OCL_DECLARE_FUNC( clReleaseMemObject );
     OCL_DECLARE_FUNC( clReleaseProgram );
     OCL_DECLARE_FUNC( clSetKernelArg );
+    OCL_DECLARE_FUNC( clWaitForEvents );
+    OCL_DECLARE_FUNC( clGetEventProfilingInfo );
 } x264_opencl_function_t;
 
 /* Number of downscale resolutions to use for motion search */
